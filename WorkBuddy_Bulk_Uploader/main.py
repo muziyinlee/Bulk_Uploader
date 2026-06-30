@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 BASE_DIR = r"D:\WorkBuddy\Animations"
 TARGET_URL = "https://school.lingshi.com/" 
 AUTH_FILE = "auth.json"
-SUPPORTED_EXTENSIONS = ('.mp4', '.avi', '.mov', '.mp3', '.wav', '.aac')
+SUPPORTED_EXTENSIONS = ('.mp4', '.avi', '.mkv')
 STEP_DELAY = 500  # 每步操作间的基础缓冲延时（毫秒），防动画遮挡与轻微卡顿
 # ============================================
 
