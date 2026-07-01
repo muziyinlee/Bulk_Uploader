@@ -16,30 +16,30 @@ STEP_DELAY = 500  # 每步操作间的基础缓冲延时（毫秒），防动画
 
 def process_folders(target_course, target_folder=None):
     if not os.path.exists(BASE_DIR):
-        print(f"❌ 找不到项目路径: {BASE_DIR}")
+        print(f"[错误] 找不到项目路径: {BASE_DIR}")
         return
 
     if not os.path.exists(AUTH_FILE):
-        print(f"❌ 找不到 {AUTH_FILE}，请先运行 auth_setup.py 登录。")
+        print(f"[错误] 找不到 {AUTH_FILE}，请先运行 auth_setup.py 登录。")
         return
 
     # 获取所有子文件夹
     all_folders = [f for f in os.listdir(BASE_DIR) if os.path.isdir(os.path.join(BASE_DIR, f))]
     if not all_folders:
-        print("⚠️ 没有找到任何子文件夹。")
+        print("[警告] 没有找到任何子文件夹。")
         return
 
     # 核心逻辑：如果指定了目标文件夹，则过滤列表
     if target_folder:
         if target_folder in all_folders:
             folders_to_process = [target_folder]
-            print(f"🎯 收到指令，仅处理指定文件夹: {target_folder}")
+            print(f"[目标] 收到指令，仅处理指定文件夹: {target_folder}")
         else:
-            print(f"❌ 错误：在 {BASE_DIR} 下找不到名为 '{target_folder}' 的文件夹。")
+            print(f"[错误] 在 {BASE_DIR} 下找不到名为 '{target_folder}' 的文件夹。")
             return
     else:
         folders_to_process = all_folders
-        print(f"📂 未指定单一文件夹，将批量处理全部 {len(folders_to_process)} 个文件夹。")
+        print(f"[批量] 未指定单一文件夹，将批量处理全部 {len(folders_to_process)} 个文件夹。")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
@@ -56,10 +56,10 @@ def process_folders(target_course, target_folder=None):
             ]
 
             if not files_to_upload:
-                print(f"⏩ 跳过 {folder_name}：未找到音视频文件。")
+                print(f"[跳过] {folder_name}：未找到音视频文件。")
                 continue
 
-            print(f"\n🚀 开始处理: {folder_name} (包含 {len(files_to_upload)} 个文件) -> 目标教材: {target_course}")
+            print(f"\n[开始] 处理: {folder_name} (包含 {len(files_to_upload)} 个文件) -> 目标教材: {target_course}")
             
             try:
                 # 1. 访问系统首页
@@ -81,7 +81,7 @@ def process_folders(target_course, target_folder=None):
                 # 拆分所有输入的关键词
                 keywords = target_course.split()
                 if not keywords:
-                    print("❌ 错误：未提供有效的教材名称。")
+                    print("[错误] 未提供有效的教材名称。")
                     return
                 # 取第一个词作为搜索主词扩大范围
                 primary_keyword = keywords[0]
@@ -96,17 +96,17 @@ def process_folders(target_course, target_folder=None):
                 page.locator(".el-input__suffix .ls-icon").first.click()
                 page.wait_for_timeout(2000)
 
-                # 5. 多关键词匹配逻辑：精准定位到行，并点击该行的【编辑】按钮
+                # 5. 多关键词匹配逻辑：无视前端类名拼写错误，利用DOM层级相对定位法寻找编辑按钮
                 print(f"  -> 步骤5：在结果中精准检索同时包含 {keywords} 的教材并点击【编辑】...")
-                # 寻找包含【编辑按钮】的整行容器 (.flex.items-center)
-                course_row = page.locator("div.flex.items-center").filter(has=page.locator("span#editFolder")).filter(has_text=keywords[0])
                 
-                # 链式过滤后续所有关键词
+                # 5.1 锁定包含所有确切文本的最深层标题节点
+                title_locator = page.locator(".ls-tooltip-title").filter(has_text=keywords[0])
                 for kw in keywords[1:]:
-                    course_row = course_row.filter(has_text=kw)
+                    title_locator = title_locator.filter(has_text=kw)
                 
-                # 定位到正确的行后，精准点击该行内部的编辑按钮
-                course_row.first.locator("span#editFolder").click()
+                # 5.2 黑科技：以该标题为起点，向外层追溯到最近的一个包含【编辑】按钮的祖先节点(也就是这一整行)，然后精准点击该行内的编辑按钮
+                edit_btn = title_locator.first.locator("xpath=./ancestor::*[.//span[@id='editFolder']][1]").locator("span#editFolder")
+                edit_btn.click()
                 page.wait_for_timeout(STEP_DELAY + 1000)
 
                 # 6. 点击 添加单元
@@ -156,33 +156,41 @@ def process_folders(target_course, target_folder=None):
                         break 
                 
                 if not clicked:
-                    print("  -> ⚠️ 警告：未找到可见的确认按钮！")
+                    print("  -> [警告] 未找到可见的确认按钮！")
 
-                print(f"✅ {folder_name} 已成功作为单元添加并暂存！")
+                print(f"[成功] {folder_name} 已成功作为单元添加并暂存！")
                 page.wait_for_timeout(3000)
 
             except PlaywrightTimeoutError:
-                print(f"❌ 处理 {folder_name} 时发生超时错误，请观察浏览器停在了哪一步。")
+                print(f"[错误] 处理 {folder_name} 时发生超时错误，请观察浏览器停在了哪一步。")
             except Exception as e:
-                print(f"❌ 处理 {folder_name} 时发生未知错误: {e}")
+                print(f"[错误] 处理 {folder_name} 时发生未知错误: {e}")
 
-        print("\n🎉 任务执行完毕！")
-        print("💡 浏览器将保持开启状态供你检查。")
+        print("\n[完成] 任务执行完毕！")
+        print("[提示] 浏览器将保持开启状态供你检查。")
         
         try:
             # 兼容终端手跑与 WorkBuddy 自动跑两种环境
-            input("👉 检查完毕后，请在此终端按【回车键】以结束脚本并关闭浏览器...")
+            input("[等待] 检查完毕后，请在此终端按【回车键】以结束脚本并关闭浏览器...")
         except EOFError:
-            print("🤖 检测到自动化助手(WorkBuddy)在后台运行...")
-            print("⏳ 脚本将在 10 秒后自动结束并关闭浏览器，请抓紧检查！")
+            print("[系统] 检测到自动化助手(WorkBuddy)在后台运行...")
+            print("[倒计时] 脚本将在 10 秒后自动结束并关闭浏览器，请抓紧检查！")
             page.wait_for_timeout(10000)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="指定教材新建单元并上传视频")
-    # 教材名称的强制参数，支持空格分隔的多关键词
-    parser.add_argument("-c", "--course", type=str, required=True, help="要搜索并上传至的目标教材名称 (支持多关键词空格分隔，如 'CBBC 2026')")
-    parser.add_argument("-f", "--folder", type=str, help="指定要上传的特定文件夹名称（不填则处理所有文件夹）", default=None)
+    parser.add_argument("-c", "--course", type=str, default=None, help="要搜索并上传至的目标教材名称 (支持多关键词空格分隔，如 'CBBC 2026')")
+    parser.add_argument("-f", "--folder", type=str, default=None, help="指定要上传的特定文件夹名称")
     
     args = parser.parse_args()
     
+    # 专门给 WorkBuddy 设置的“防呆”拦截器
+    if not args.course:
+        print("===============================================================")
+        print("[错误] WorkBuddy 调用失败：你没有传递必需的 '-c' (教材名称) 参数！")
+        print("[系统指令] 请立刻重新分析用户的对话！你必须提取出用户提到的“教材名称”，并带上参数重新执行脚本！")
+        print("[正确示例] python main.py -c \"CBBC 2026\" -f \"4月\"")
+        print("===============================================================")
+        exit(1)
+        
     process_folders(target_course=args.course, target_folder=args.folder)
