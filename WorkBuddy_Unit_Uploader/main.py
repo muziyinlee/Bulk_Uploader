@@ -2,10 +2,14 @@ import os
 import argparse
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
+# 获取当前脚本所在的绝对路径目录（解决 WorkBuddy 后台执行找不到文件的问题）
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # ================= 配置区域 =================
 BASE_DIR = r"E:\WorkBuddy\Animations"
 TARGET_URL = "https://school.lingshi.com/" 
-AUTH_FILE = "auth.json"
+# 强制绑定当前目录下的 auth.json
+AUTH_FILE = os.path.join(CURRENT_DIR, "auth.json") 
 SUPPORTED_EXTENSIONS = ('.mp4', '.avi', '.mkv')
 STEP_DELAY = 500  # 每步操作间的基础缓冲延时（毫秒），防动画遮挡与轻微卡顿
 # ============================================
@@ -79,7 +83,7 @@ def process_folders(target_course, target_folder=None):
                 if not keywords:
                     print("❌ 错误：未提供有效的教材名称。")
                     return
-                # 取第一个词作为搜索主词扩大范围，例如从 "CBBC 2026" 中提取 "CBBC"
+                # 取第一个词作为搜索主词扩大范围
                 primary_keyword = keywords[0]
 
                 # 4. 在搜索框中输入基础关键词
@@ -92,16 +96,17 @@ def process_folders(target_course, target_folder=None):
                 page.locator(".el-input__suffix .ls-icon").first.click()
                 page.wait_for_timeout(2000)
 
-                # 5. 多关键词匹配逻辑：检索满足所有关键词的标题并点击
-                print(f"  -> 步骤5：在结果中精准检索同时包含 {keywords} 的教材...")
-                # 寻找包含第一个关键词的元素
-                course_locator = page.locator("div, span, a").filter(has_text=keywords[0])
-                # 链式过滤后续所有关键词（如要求必须同时包含 "2026"）
-                for kw in keywords[1:]:
-                    course_locator = course_locator.filter(has_text=kw)
+                # 5. 多关键词匹配逻辑：精准定位到行，并点击该行的【编辑】按钮
+                print(f"  -> 步骤5：在结果中精准检索同时包含 {keywords} 的教材并点击【编辑】...")
+                # 寻找包含【编辑按钮】的整行容器 (.flex.items-center)
+                course_row = page.locator("div.flex.items-center").filter(has=page.locator("span#editFolder")).filter(has_text=keywords[0])
                 
-                # 点击最终同时满足所有条件的第一个匹配结果
-                course_locator.first.click()
+                # 链式过滤后续所有关键词
+                for kw in keywords[1:]:
+                    course_row = course_row.filter(has_text=kw)
+                
+                # 定位到正确的行后，精准点击该行内部的编辑按钮
+                course_row.first.locator("span#editFolder").click()
                 page.wait_for_timeout(STEP_DELAY + 1000)
 
                 # 6. 点击 添加单元
@@ -163,7 +168,14 @@ def process_folders(target_course, target_folder=None):
 
         print("\n🎉 任务执行完毕！")
         print("💡 浏览器将保持开启状态供你检查。")
-        input("👉 检查完毕后，请在此终端按【回车键】以结束脚本并关闭浏览器...")
+        
+        try:
+            # 兼容终端手跑与 WorkBuddy 自动跑两种环境
+            input("👉 检查完毕后，请在此终端按【回车键】以结束脚本并关闭浏览器...")
+        except EOFError:
+            print("🤖 检测到自动化助手(WorkBuddy)在后台运行...")
+            print("⏳ 脚本将在 10 秒后自动结束并关闭浏览器，请抓紧检查！")
+            page.wait_for_timeout(10000)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="指定教材新建单元并上传视频")
