@@ -74,9 +74,17 @@ def process_folders(target_course, target_folder=None):
                 page.locator("#textbookMine").click()
                 page.wait_for_timeout(2000) 
 
-                # 4. 在搜索框中输入项目名称并搜索
-                print(f"  -> 步骤3：在搜索框输入教材关键词 [{target_course}]...")
-                page.get_by_placeholder("请输入教材名称").fill(target_course)
+                # 拆分所有输入的关键词
+                keywords = target_course.split()
+                if not keywords:
+                    print("❌ 错误：未提供有效的教材名称。")
+                    return
+                # 取第一个词作为搜索主词扩大范围，例如从 "CBBC 2026" 中提取 "CBBC"
+                primary_keyword = keywords[0]
+
+                # 4. 在搜索框中输入基础关键词
+                print(f"  -> 步骤3：在搜索框输入基础关键词 [{primary_keyword}]...")
+                page.get_by_placeholder("请输入教材名称").fill(primary_keyword)
                 page.wait_for_timeout(STEP_DELAY)
                 
                 # 点击搜索图标
@@ -85,14 +93,14 @@ def process_folders(target_course, target_folder=None):
                 page.wait_for_timeout(2000)
 
                 # 5. 多关键词匹配逻辑：检索满足所有关键词的标题并点击
-                print("  -> 步骤5：检索并进入符合要求的教材...")
-                keywords = target_course.split()
-                # 基础定位器，寻找包含第一个关键词的元素
+                print(f"  -> 步骤5：在结果中精准检索同时包含 {keywords} 的教材...")
+                # 寻找包含第一个关键词的元素
                 course_locator = page.locator("div, span, a").filter(has_text=keywords[0])
-                # 链式过滤后续关键词
+                # 链式过滤后续所有关键词（如要求必须同时包含 "2026"）
                 for kw in keywords[1:]:
                     course_locator = course_locator.filter(has_text=kw)
-                # 点击匹配结果中的第一个
+                
+                # 点击最终同时满足所有条件的第一个匹配结果
                 course_locator.first.click()
                 page.wait_for_timeout(STEP_DELAY + 1000)
 
@@ -111,7 +119,7 @@ def process_folders(target_course, target_folder=None):
 
                 # 8. 在新增的单元行中点击“本地上传”
                 print("  -> 步骤8：在对应单元行点击【本地上传】并注入文件...")
-                # 精准定位：找到包含文件夹名称的那一行
+                # 精准定位：找到包含文件夹名称的那一个树状节点行
                 unit_row = page.locator("div.el-tree-node__content").filter(has_text=folder_name).first
                 
                 with page.expect_file_chooser() as fc_info:
@@ -120,7 +128,7 @@ def process_folders(target_course, target_folder=None):
                 file_chooser.set_files(files_to_upload)
                 page.wait_for_timeout(STEP_DELAY)
                 
-                # 9. 待上传完成后点击确认（复用原有逻辑）
+                # 9. 待上传完成后点击确认
                 print("  -> 步骤9：文件上传中，无限期等待【确认】按钮激活...")
                 confirm_btn = page.locator("button.el-button", has_text="确认")
                 confirm_btn.first.click(timeout=0) 
@@ -159,7 +167,7 @@ def process_folders(target_course, target_folder=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="指定教材新建单元并上传视频")
-    # 新增了教材名称的强制参数
+    # 教材名称的强制参数，支持空格分隔的多关键词
     parser.add_argument("-c", "--course", type=str, required=True, help="要搜索并上传至的目标教材名称 (支持多关键词空格分隔，如 'CBBC 2026')")
     parser.add_argument("-f", "--folder", type=str, help="指定要上传的特定文件夹名称（不填则处理所有文件夹）", default=None)
     
