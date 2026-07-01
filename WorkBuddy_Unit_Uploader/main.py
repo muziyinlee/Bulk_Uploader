@@ -118,8 +118,10 @@ def process_folders(target_course, target_folder=None):
                 print(f"  -> 步骤7：输入单元名称 [{folder_name}] 并确认...")
                 page.get_by_placeholder("请输入名称，限制50字内").fill(folder_name)
                 page.wait_for_timeout(STEP_DELAY)
-                # 寻找弹窗内的确认按钮并点击
-                page.locator("button.el-button", has_text="确认").click()
+                
+                # [核心修复区] 寻找当前可见的弹窗区域内的“确认”按钮，避免误点到幽灵节点
+                confirm_dialog_btn = page.locator(".dialog-footer button:visible").filter(has_text="确认").first
+                confirm_dialog_btn.click()
                 page.wait_for_timeout(STEP_DELAY + 1000)
 
                 # 8. 在新增的单元行中点击“本地上传”
@@ -135,8 +137,8 @@ def process_folders(target_course, target_folder=None):
                 
                 # 9. 待上传完成后点击确认
                 print("  -> 步骤9：文件上传中，无限期等待【确认】按钮激活...")
-                confirm_btn = page.locator("button.el-button", has_text="确认")
-                confirm_btn.first.click(timeout=0) 
+                upload_confirm_btn = page.locator("button.el-button:visible", has_text="确认").last
+                upload_confirm_btn.click(timeout=0) 
                 print("  -> 【确认】点击成功！上传完毕。")
                 page.wait_for_timeout(STEP_DELAY + 500) 
 
